@@ -18,7 +18,8 @@ public class StateMachineProject : ModuleRules
 			Path.Combine(ModuleDirectory, "AIs"),
 			Path.Combine(ModuleDirectory, "Graph"),
 			Path.Combine(ModuleDirectory, "InfluenceMapping"),
-			Path.Combine(ModuleDirectory, "Pathfinding")
+			Path.Combine(ModuleDirectory, "Pathfinding"),
+			Path.Combine(ModuleDirectory, "StateMachine")
 			}
 		);
 
