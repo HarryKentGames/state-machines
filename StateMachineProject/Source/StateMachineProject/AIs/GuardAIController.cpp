@@ -192,76 +192,70 @@ void AGuardAIController::Flee()
     std::vector<float> enemyLOSMap = std::vector<float>(propagator->GetInfluenceMap().size());
     propagator->GetInfluenceMapController()->GetPropagatorEnemyLOSMap(propagator, enemyLOSMap);
 
-    
+
     if ((moveCompleted && (enemyLOSMap[currentNode->GetIndex()] > 0.0f || enemyInfluenceMap[currentNode->GetIndex()] > 0.0f)) || 
         (!moveCompleted && (enemyLOSMap[destIndex] > 0.0f || enemyInfluenceMap[destIndex] > 0.0f)))
     {
-        TArray<UGraphNode*> validNodes;
-        TArray<UGraphNode*> queue;
-        TArray<UGraphNode*> visitedNodes;
-        UGraphNode* observedNode = propagator->GetCurrentNode();
-        queue.Add(observedNode);
-        while (queue.Num() > 0)
+        TArray<UGraphNode*> nodes = propagator->GetInfluenceMapController()->GetNodes();
+        TArray<UGraphNode*> inCoverAgainstWallCloseNodes;
+        for (int i = 0; i < enemyLOSMap.size(); i++)
         {
-            observedNode = queue[0];
-            TArray<UGraphNode*> neighbours;
-            observedNode->GetNeighbours().GenerateKeyArray(neighbours);
-
-            for (UGraphNode* neighbour : neighbours)
+            //Ignore all nodes that are in view:
+            if (enemyLOSMap[i] > 0.0f || enemyInfluenceMap[i] > 0.0f)
             {
-                //If no allies have influence over the neighbour:
-                if (enemyLOSMap[neighbour->GetIndex()] <= 0.0f && enemyInfluenceMap[neighbour->GetIndex()] <= 0.0f && !validNodes.Contains(neighbour))
-                {
-                    bool tooClose = false;
-                    for (UGraphNode* node : validNodes)
-                    {
-                        if (FVector::Dist(node->GetCoordinates(), neighbour->GetCoordinates()) < 150.0f)
-                        {
-                            tooClose = true;
-                            break;
-                        }
-                    }
-                    if (!tooClose)
-                    {
-                        validNodes.Add(neighbour);
-                    }
-                }
-                //else if the node has not been visited add it to the queue:
-                else if (!visitedNodes.Contains(neighbour) && !queue.Contains(neighbour))
-                {
-                    queue.Add(neighbour);
-                }
+                continue;
             }
-            visitedNodes.Add(observedNode);
-            queue.RemoveAt(0);
-        }
-        //Find the shortest path to a point of cover:
-        TArray<UPathNode*> shortestPath;
-        float shortestPathLength = INT_MAX;
-        for (UGraphNode* validNode : validNodes)
-        {
-            TArray<UPathNode*> path = pathfindingController->RunPathfinding(currentNode->GetIndex(), validNode->GetIndex(), fleeTacticalInformation);
-            float pathLength = pathfindingController->CalculatePathLength(path, fleeTacticalInformation);
-            UNavigationPath* pathToEnemy = UNavigationSystemV1::GetCurrent(GetWorld())->FindPathToLocationSynchronously(GetWorld(), aiSettings->target->GetActorLocation(), validNode->GetCoordinates());
-            if (pathLength - pathToEnemy->GetPathLength() < shortestPathLength)
+            //Ignore all nodes that are not up against a wall:
+            TMap<UGraphNode*, float> neighbours = nodes[i]->GetNeighbours();
+            if (neighbours.Num() > 5)
             {
-                shortestPath = path;
-                shortestPathLength = pathLength;
+                continue;
+            }
+            //TODO: Update this to take into account all enemies:
+            FVector dir = aiSettings->target->GetActorLocation() - nodes[i]->GetCoordinates();
+            dir.Normalize();
+            FHitResult hitResult = FHitResult();
+            FCollisionQueryParams collisionParams;
+            FCollisionResponseParams collisionResponseParams = FCollisionResponseParams(ECollisionResponse::ECR_Block);
+            //Ignore nodes that are not on the opposite side of a wall from the enemy:
+            if (!GetWorld()->LineTraceSingleByChannel(hitResult, nodes[i]->GetCoordinates(), nodes[i]->GetCoordinates() + dir * propagator->GetInfluenceMapController()->GetNodeNetwork()->GetResolution() * 1.5f, ECC_GameTraceChannel1, collisionParams, collisionResponseParams))
+            {
+                continue;
+            }
+            //Add the node to a list of in-cover nodes:
+            inCoverAgainstWallCloseNodes.Add(nodes[i]);
+        }
+        if (inCoverAgainstWallCloseNodes.Num() > 0)
+        {
+            //Find the shortest path to a point of cover:
+            TArray<UPathNode*> shortestPath;
+            float lowestPathScore = INT_MAX;
+            for (UGraphNode* inCoverNode : inCoverAgainstWallCloseNodes)
+            {
+                TArray<UPathNode*> path = pathfindingController->RunPathfinding(currentNode->GetIndex(), inCoverNode->GetIndex(), fleeTacticalInformation);
+                float pathLength = pathfindingController->CalculatePathLength(path, fleeTacticalInformation);
+                UNavigationPath* pathToEnemy = UNavigationSystemV1::GetCurrent(GetWorld())->FindPathToLocationSynchronously(GetWorld(), aiSettings->target->GetActorLocation(), inCoverNode->GetCoordinates());
+                float pathScore = pathLength - pathToEnemy->GetPathLength();
+                if (pathScore < lowestPathScore)
+                {
+                    shortestPath = path;
+                    lowestPathScore = pathScore;
+                }
+                UPathFollowingComponent* pathFollowingComponent = GetPathFollowingComponent();
+                //Add all the waypoints from the calculated path:
+                TArray<FVector> locations;
+                for (UPathNode* pathNode : shortestPath)
+                {
+                    locations.Add(pathNode->node->GetCoordinates());
+                }
+                //Assign the new path to the agent:
+                AController* controller = Cast<AController>(this);
+                FMetaNavMeshPath* MetaNavMeshPath = new FMetaNavMeshPath(locations, *controller);
+                TSharedPtr<FMetaNavMeshPath, ESPMode::ThreadSafe> MetaPathPtr(MetaNavMeshPath);
+                pathFollowingComponent->RequestMove(FAIMoveRequest(), MetaPathPtr);
+                moveCompleted = false;
             }
         }
-        UPathFollowingComponent* pathFollowingComponent = GetPathFollowingComponent();
-        //Add all the waypoints from the calculated path:
-        TArray<FVector> locations;
-        for (UPathNode* pathNode : shortestPath)
-        {
-            locations.Add(pathNode->node->GetCoordinates());
-        }
-        //Assign the new path to the agent:
-        AController* controller = Cast<AController>(this);
-        FMetaNavMeshPath* MetaNavMeshPath = new FMetaNavMeshPath(locations, *controller);
-        TSharedPtr<FMetaNavMeshPath, ESPMode::ThreadSafe> MetaPathPtr(MetaNavMeshPath);
-        pathFollowingComponent->RequestMove(FAIMoveRequest(), MetaPathPtr);
-        moveCompleted = false;
     }
 }
 
