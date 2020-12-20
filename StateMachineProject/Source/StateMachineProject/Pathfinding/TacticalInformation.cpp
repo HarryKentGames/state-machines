@@ -11,7 +11,14 @@ TacticalInformation::~TacticalInformation()
 
 float TacticalInformation::GetQualityAtIndex(int index)
 {
-	return weight * tacticalMap[index];
+	if (index < tacticalMap.size())
+	{
+		return weight * tacticalMap[index];
+	}
+	else
+	{
+		return 0;
+	}
 }
 
 void TacticalInformation::UpdateTacticalMap()

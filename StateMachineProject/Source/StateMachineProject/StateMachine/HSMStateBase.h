@@ -37,7 +37,9 @@ public:
 	virtual void OnExit();
 
 private:
+	UPROPERTY()
 	UHSMStateMachine* parentMachine;
+	UPROPERTY()
 	TArray<UHSMTransition*> transitions;
 
 	std::function<void()> enterFunction;

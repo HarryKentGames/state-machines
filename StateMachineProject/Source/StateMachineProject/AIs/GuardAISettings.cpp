@@ -19,39 +19,24 @@ void UGuardAISettings::BeginPlay()
 			gun = (USceneComponent*) child;
 		}
 	}
+	ammo = 10;
 }
 
 void UGuardAISettings::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	if (currentWaypointIndex >= waypoints.Num() && !firing && aimed)
-	{
-		FireWeapon();
-	}
-	else if (currentWaypointIndex >= waypoints.Num() && !aimed)
-	{
-		AimWeapon();
-	}
-
-	if (triggerPulled)
-	{
-		ShootBullet();
-	}
-}
-
-void UGuardAISettings::AimWeapon()
-{
-	aiming = true;
 }
 
 void UGuardAISettings::FireWeapon()
 {
 	firing = true; 
+	ammo--;
+	DrawDebugLine(GetWorld(), gun->GetComponentLocation(), gun->GetComponentLocation() + (2000000.0f * gun->GetRightVector()), FColor::Red, false, 0.09f, (uint8)'\000', 5.0f);
 }
 
-void UGuardAISettings::ShootBullet()
+void UGuardAISettings::ReloadWeapon()
 {
-	DrawDebugLine(GetWorld(), gun->GetComponentLocation(), gun->GetComponentLocation() + (2000000.0f * gun->GetRightVector()), FColor::Red, false, 0.09f, (uint8)'\000', 5.0f);
-	triggerPulled = false;
+	reloading = true;
+	ammo = 10;
 }
 

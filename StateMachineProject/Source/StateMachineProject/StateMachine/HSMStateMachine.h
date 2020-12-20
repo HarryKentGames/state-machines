@@ -23,8 +23,13 @@ public:
 private:
 	bool resumable;
 
+	UPROPERTY()
 	TArray<UHSMStateBase*> states;
+
+	UPROPERTY()
 	UHSMStateBase* initialState;
+
+	UPROPERTY()
 	UHSMStateBase* currentState;
 
 	void ChangeCurrentState(UHSMStateBase* state);

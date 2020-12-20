@@ -3,7 +3,9 @@
 UHSMStateMachine* UHSMStateMachine::MAKE(std::function<void()> newEnterFunction, std::function<void()> newTickFunction, std::function<void()> newExitFunction)
 {
 	UHSMStateMachine* fsm = NewObject<UHSMStateMachine>();
+	fsm->SetEnterLogic(newEnterFunction);
 	fsm->SetTickLogic(newTickFunction);
+	fsm->SetExitLogic(newExitFunction);
 	return fsm;
 }
 
@@ -55,6 +57,7 @@ void UHSMStateMachine::OnTick()
 	{
 		if (transition->IsTriggered())
 		{
+			transition->OnTransition();
 			ChangeCurrentState(transition->GetTargetState());
 			break;
 		}

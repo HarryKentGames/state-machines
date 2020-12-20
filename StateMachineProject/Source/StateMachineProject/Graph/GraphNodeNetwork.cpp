@@ -170,9 +170,9 @@ void UGraphNodeNetwork::CreateViewNetwork()
 			//Raycast between the nodes:
 			FHitResult hitResult = FHitResult();
 			FCollisionQueryParams collisionParams;
-			FCollisionResponseParams collisionResponseParams = FCollisionResponseParams(ECollisionResponse::ECR_Overlap);
+			FCollisionResponseParams collisionResponseParams = FCollisionResponseParams(ECollisionResponse::ECR_Block);
 			//If the raycast is not blocked, nodes are in view of each other:
-			if (!GetWorld()->LineTraceSingleByChannel(hitResult, node->GetCoordinates(), otherNode->GetCoordinates(), ECC_WorldDynamic, ECollisionChannel::ECC_WorldStatic))
+			if (!GetWorld()->LineTraceSingleByChannel(hitResult, node->GetCoordinates(), otherNode->GetCoordinates(), ECC_GameTraceChannel1, collisionParams, collisionResponseParams))
 			{
 				node->AddInViewNode(otherNode, hitResult.Distance);
 				otherNode->AddInViewNode(node, hitResult.Distance);
@@ -180,6 +180,10 @@ void UGraphNodeNetwork::CreateViewNetwork()
 			//Else if the raycast is blocked, nodes are not in view of eachother:
 			else
 			{
+				if (hitResult.Actor->GetName() == "TargetBlueprint")
+				{
+					UE_LOG(LogTemp, Warning, TEXT("Some warning message"));
+				}
 				node->AddOutOfViewNode(otherNode);
 				otherNode->AddOutOfViewNode(node);
 			}
