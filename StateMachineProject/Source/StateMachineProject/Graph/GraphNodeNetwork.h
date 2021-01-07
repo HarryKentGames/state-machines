@@ -41,4 +41,5 @@ private:
 	void GenerateNetwork(const UNavigationSystemV1* navSys);
 	void CreateMovementNetwork(const UNavigationSystemV1* navSys);
 	void CreateViewNetwork();
+	void DebugDraw();
 };

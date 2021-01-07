@@ -14,6 +14,7 @@ void UGraphNodeNetwork::BeginPlay()
 void UGraphNodeNetwork::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	//DebugDraw();
 }
 
 TArray<UGraphNode*> UGraphNodeNetwork::GetNodes()
@@ -187,6 +188,19 @@ void UGraphNodeNetwork::CreateViewNetwork()
 				node->AddOutOfViewNode(otherNode);
 				otherNode->AddOutOfViewNode(node);
 			}
+		}
+	}
+}
+
+void UGraphNodeNetwork::DebugDraw()
+{
+	//Loop over all nodes:
+	for (UGraphNode* node : nodes)
+	{
+		DrawDebugPoint(GetWorld(), node->GetCoordinates(), 10, FColor::Red, false, 0.0f);
+		for(TPair<UGraphNode*, float> neighbour : node->GetNeighbours())
+		{
+			DrawDebugLine(GetWorld(), node->GetCoordinates(), neighbour.Key->GetCoordinates(), FColor::Red, false, 0.0f);
 		}
 	}
 }

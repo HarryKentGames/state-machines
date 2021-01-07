@@ -13,6 +13,12 @@ class STATEMACHINEPROJECT_API UGuardAISettings : public UActorComponent
 
 public:	
 	UPROPERTY(EditAnywhere)
+	float health;
+	UPROPERTY(EditAnywhere)
+	float maxHealth;
+	float timeSinceTakenDamage;
+
+	UPROPERTY(EditAnywhere)
 	TArray<FVector> waypoints;
 	int currentWaypointIndex = 0;
 
@@ -38,11 +44,15 @@ public:
 	UPROPERTY(EditAnywhere)
 	AActor* target;
 
+	UPROPERTY(EditAnywhere)
+	TArray<AActor*> enemies;
+
 	UGuardAISettings();
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	
 	void FireWeapon();
 	void ReloadWeapon();
+	void TakeDamage(float damage);
 
 protected:
 	virtual void BeginPlay() override;	
