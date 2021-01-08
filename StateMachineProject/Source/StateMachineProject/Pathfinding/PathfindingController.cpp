@@ -1,11 +1,11 @@
-#include "TacticalPathfindingController.h"
+#include "PathfindingController.h"
 
-UTacticalPathfindingController::UTacticalPathfindingController()
+UPathfindingController::UPathfindingController()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 }
 
-UTacticalPathfindingController* UTacticalPathfindingController::FindInstanceInWorld(UWorld* world)
+UPathfindingController* UPathfindingController::FindInstanceInWorld(UWorld* world)
 {
 	//Get all the actors in the current world:
 	TArray<AActor*> actors = TArray<AActor*>();
@@ -13,20 +13,20 @@ UTacticalPathfindingController* UTacticalPathfindingController::FindInstanceInWo
 	//Find the actor that has an influence map controller attached to it:
 	AActor** actor = actors.FindByPredicate([](AActor*& item)
 	{
-		return item->FindComponentByClass<UTacticalPathfindingController>() != nullptr;
+		return item->FindComponentByClass<UPathfindingController>() != nullptr;
 	});
 	//Return the influence map controller component:
-	return (*actor)->FindComponentByClass<UTacticalPathfindingController>();
+	return (*actor)->FindComponentByClass<UPathfindingController>();
 }
 
-void UTacticalPathfindingController::BeginPlay()
+void UPathfindingController::BeginPlay()
 {
 	Super::BeginPlay();
 	graphController = this->GetOwner()->FindComponentByClass<UGraphNodeNetwork>();
 	graph = graphController->CreateNetwork();
 }
 
-TArray<UPathNode*> UTacticalPathfindingController::RunPathfinding(int startIndex, int endIndex, TArray<TacticalInformation*> tacticalInformations)
+TArray<UPathNode*> UPathfindingController::RunPathfinding(int startIndex, int endIndex, TArray<TacticalInformation*> tacticalInformations)
 {
 	if (startIndex >= 0 && startIndex < graph.Num() && endIndex >= 0 && endIndex < graph.Num())
 	{
@@ -38,7 +38,7 @@ TArray<UPathNode*> UTacticalPathfindingController::RunPathfinding(int startIndex
 	return TArray<UPathNode*>();
 }
 
-float UTacticalPathfindingController::CalculatePathLength(TArray<UPathNode*> path, TArray<TacticalInformation*> tacticalInformations)
+float UPathfindingController::CalculatePathLength(TArray<UPathNode*> path, TArray<TacticalInformation*> tacticalInformations)
 {
 	float pathLength = 0.0f;
 	for (int i = 0; i < path.Num() - 1; i++)
@@ -55,7 +55,7 @@ float UTacticalPathfindingController::CalculatePathLength(TArray<UPathNode*> pat
 	return pathLength;
 }
 
-void UTacticalPathfindingController::DrawNodes(TArray<UPathNode*> path, FColor color, bool connect)
+void UPathfindingController::DrawNodes(TArray<UPathNode*> path, FColor color, bool connect)
 {
 	for (int i = 0; i < path.Num(); i++)
 	{
@@ -67,7 +67,7 @@ void UTacticalPathfindingController::DrawNodes(TArray<UPathNode*> path, FColor c
 	}
 }
 
-void UTacticalPathfindingController::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void UPathfindingController::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 }

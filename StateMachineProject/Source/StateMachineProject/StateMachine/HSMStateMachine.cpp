@@ -40,6 +40,7 @@ void UHSMStateMachine::ChangeCurrentState(UHSMStateBase* state)
 
 void UHSMStateMachine::OnEnter()
 {
+	Super::OnEnter();
 	if (resumable && currentState != nullptr)
 	{
 		currentState->OnEnter();

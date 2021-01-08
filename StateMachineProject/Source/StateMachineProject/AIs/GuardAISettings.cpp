@@ -48,7 +48,10 @@ void UGuardAISettings::FireWeapon()
 	{
 		AActor* enemy = enemies[i];
 		AGuardAIController* enemyController = (AGuardAIController*)((APawn*)enemy)->GetController();
-		enemyController->SetInvestigationPoint(GetOwner()->GetActorLocation());
+		if (GetOwner() != nullptr && enemyController != nullptr)
+		{
+			enemyController->AlertToPoint(GetOwner()->GetActorLocation());
+		}
 	}
 }
 

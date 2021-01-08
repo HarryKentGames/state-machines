@@ -30,6 +30,7 @@ public:
 	//Getters and Setters:
 	UGraphNodeNetwork* GetNodeNetwork() const;
 	TArray<UGraphNode*> GetNodes() const;
+	TArray<UInfluenceMapPropagator*> GetPropagators();
 	void AddPropagator(UInfluenceMapPropagator* propagatorToAdd);
 	void RemovePropagator(UInfluenceMapPropagator* propagatorToRemove);
 	UGraphNode* GetClosestNode(FVector coordinates) const;
@@ -47,6 +48,8 @@ public:
 	void GetPropagatorLOSMap(UInfluenceMapPropagator* propagator, std::vector<float>& LOSMap);
 	void GetPropagatorAllyLOSMap(UInfluenceMapPropagator* propagator, std::vector<float>& LOSMap);
 	void GetPropagatorEnemyLOSMap(UInfluenceMapPropagator* propagator, std::vector<float>& LOSMap);
+
+	void DebugDraw();
 
 protected:
 	virtual void BeginPlay() override;

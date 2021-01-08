@@ -6,17 +6,18 @@
 #include "GraphNodeNetwork.h"
 #include "Kismet/GameplayStatics.h"
 #include "TacticalPathfinder.h"
-#include "TacticalPathfindingController.generated.h"
+#include "PathfindingController.generated.h"
 
-UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
-class STATEMACHINEPROJECT_API UTacticalPathfindingController : public USceneComponent
+
+UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
+class STATEMACHINEPROJECT_API UPathfindingController : public USceneComponent
 {
 	GENERATED_BODY()
 
 public:
-	UTacticalPathfindingController();
+	UPathfindingController();
 
-	static UTacticalPathfindingController* FindInstanceInWorld(UWorld* world);
+	static UPathfindingController* FindInstanceInWorld(UWorld* world);
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 

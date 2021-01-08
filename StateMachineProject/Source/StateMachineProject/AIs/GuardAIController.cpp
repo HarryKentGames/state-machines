@@ -7,7 +7,7 @@ void AGuardAIController::BeginPlay()
     actor = this->GetViewTarget();
     propagator = actor->FindComponentByClass<UInfluenceMapPropagator>();
     aiSettings = actor->FindComponentByClass<UGuardAISettings>();
-    pathfindingController = UTacticalPathfindingController::FindInstanceInWorld(GetWorld());
+    pathfindingController = UPathfindingController::FindInstanceInWorld(GetWorld());
     fleeTacticalInformation.Add(new AvoidEnemyTacticalInformation(5.0f, propagator));
 
     moveCompleted = true;
@@ -38,6 +38,9 @@ void AGuardAIController::BeginPlay()
     UHSMState* investigateState = UHSMState::MAKE(nullptr,
                                                   [this]() { this->Investigate(); },
                                                   nullptr);
+    UHSMState* findHelpState = UHSMState::MAKE(nullptr,
+                                               [this]() { this->FindHelp(); },
+                                               nullptr);
 
     //PATROL STATE TRANSITIONS:
     UHSMTransition* patrolToAttackTransition = UHSMTransition::MAKE(attackStateMachine, [this]() { return this->CanSeeEnemy(); });
@@ -46,15 +49,21 @@ void AGuardAIController::BeginPlay()
     UHSMTransition* patrolToInvestigateTransition = UHSMTransition::MAKE(investigateState, [this]() { return hasUninvestigatedLocation; });
     patrolState->AddTransition(patrolToInvestigateTransition);
 
+    UHSMTransition* patrolToFindHelpTransition = UHSMTransition::MAKE(findHelpState, [this]() { return this->IsVulnerable(); });
+    patrolState->AddTransition(patrolToFindHelpTransition);
+
     //ATTACK STATE TRANSITIONS:
-    UHSMTransition* attackToPatrolTransition = UHSMTransition::MAKE(patrolState, [this]() { return aiSettings->target == nullptr && !this->CanSeeEnemy(); });
+    UHSMTransition* attackToPatrolTransition = UHSMTransition::MAKE(patrolState, [this]() { return aiSettings->target == nullptr && !this->CanSeeEnemy() && !aiSettings->reloading; });
     attackStateMachine->AddTransition(attackToPatrolTransition);
 
-    UHSMTransition* attackToInvestigateTransition = UHSMTransition::MAKE(investigateState, [this]() { return !this->CanSeeEnemy(); }, [this]() { this->OnAttackToInvestigate(); });
+    UHSMTransition* attackToInvestigateTransition = UHSMTransition::MAKE(investigateState, [this]() { return !this->CanSeeEnemy() && !aiSettings->reloading; }, [this]() { this->OnAttackToInvestigate(); });
     attackStateMachine->AddTransition(attackToInvestigateTransition);
 
-    UHSMTransition* attackToFleeTransition = UHSMTransition::MAKE(fleeState, [this]() { return this->HasLowHealth(); });
+    UHSMTransition* attackToFleeTransition = UHSMTransition::MAKE(fleeState, [this]() { return this->HasLowHealth() && !aiSettings->reloading; });
     attackStateMachine->AddTransition(attackToFleeTransition);
+
+    UHSMTransition* attackToFindHelpTransition = UHSMTransition::MAKE(findHelpState, [this]() { return this->IsVulnerable(); });
+    attackStateMachine->AddTransition(attackToFindHelpTransition);
 
     //AIM STATE TRANSITIONS:
     UHSMTransition* aimToShootTransition = UHSMTransition::MAKE(shootState, [this]() { return this->IsAimingAtTarget(); });
@@ -78,12 +87,25 @@ void AGuardAIController::BeginPlay()
     UHSMTransition* investigateToAttackTransition = UHSMTransition::MAKE(attackStateMachine, [this]() { return this->CanSeeEnemy(); });
     investigateState->AddTransition(investigateToAttackTransition);
 
+    UHSMTransition* investigateToFindHelpTransition = UHSMTransition::MAKE(findHelpState, [this]() { return this->IsVulnerable(); });
+    investigateState->AddTransition(investigateToFindHelpTransition);
+
     //FLEE STATE TRANSITIONS:
     UHSMTransition* fleeToPatrolTransition = UHSMTransition::MAKE(patrolState, [this]() { return this->HasHighHealth() && !this->CanSeeEnemy(); });
     fleeState->AddTransition(fleeToPatrolTransition);
 
     UHSMTransition* fleeToAttackTransition = UHSMTransition::MAKE(attackStateMachine, [this]() { return this->HasHighHealth() && this->CanSeeEnemy(); });
     fleeState->AddTransition(fleeToAttackTransition);
+
+    //FINDING HELP STATE TRANSITIONS:
+    UHSMTransition* findingHelpToPatrolTransition = UHSMTransition::MAKE(patrolState, [this]() { return this->IsNotVulnerable(); });
+    findHelpState->AddTransition(findingHelpToPatrolTransition);
+
+    UHSMTransition* findingHelpToAttackTransition = UHSMTransition::MAKE(attackStateMachine, [this]() { return this->IsNotVulnerable() && this->CanSeeEnemy(); });
+    findHelpState->AddTransition(findingHelpToAttackTransition);
+
+    UHSMTransition* findingHelpToInvestigateTransition = UHSMTransition::MAKE(investigateState, [this]() { return this->IsNotVulnerable() && hasUninvestigatedLocation; });
+    findHelpState->AddTransition(findingHelpToInvestigateTransition);
 
 
 
@@ -95,6 +117,7 @@ void AGuardAIController::BeginPlay()
     fsm->AddState(attackStateMachine);
     fsm->AddState(fleeState);
     fsm->AddState(investigateState);
+    fsm->AddState(findHelpState);
 
     fsm->OnEnter();
 }
@@ -102,6 +125,24 @@ void AGuardAIController::BeginPlay()
 void AGuardAIController::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
+    if (aiSettings->enemies.Num() <= 0)
+    {
+        TArray<UInfluenceMapPropagator*> allPropagators = propagator->GetInfluenceMapController()->GetPropagators();
+        for (UInfluenceMapPropagator* prop : allPropagators)
+        {
+            if (prop != this->propagator)
+            {
+                if (this->propagator->GetEnemyTeams().Contains(prop->GetTeam()))
+                {
+                    aiSettings->enemies.Add(prop->GetOwner());
+                }
+                else if (this->propagator->GetAlliedTeams().Contains(prop->GetTeam()) || this->propagator->GetTeam() == prop->GetTeam())
+                {
+                    aiSettings->allies.Add(prop->GetOwner());
+                }
+            }
+        }
+    }
     fsm->OnTick();
 }
 
@@ -128,10 +169,17 @@ void AGuardAIController::Die()
             aiSettings->enemies[i]->FindComponentByClass<UGuardAISettings>()->enemies.Remove(actor);
         }
     }
+    for (int i = 0; i < aiSettings->allies.Num(); i++)
+    {
+        if (aiSettings->allies[i] != nullptr)
+        {
+            aiSettings->allies[i]->FindComponentByClass<UGuardAISettings>()->allies.Remove(actor);
+        }
+    }
     actor->Destroy();
 }
 
-void AGuardAIController::SetInvestigationPoint(FVector newInvestigationPoint)
+void AGuardAIController::AlertToPoint(FVector newInvestigationPoint)
 {
     if (!hasUninvestigatedLocation)
     {
@@ -172,6 +220,8 @@ void AGuardAIController::Patrol()
                     //Calculate the angle the agent would have to turn to face the node:
                     FVector agentForward = actor->GetActorForwardVector();
                     FVector directionToNeighbour = neighbour->GetCoordinates() - actor->GetActorLocation();
+                    directionToNeighbour.Z = 0;
+                    agentForward.Z = 0;
                     float angle = GetAngleBetweenVectors(agentForward, directionToNeighbour);
                     //If the node is in the agents FOV, prioritise it:
                     if (angle > -30.0f && angle < 30.0f)
@@ -185,7 +235,7 @@ void AGuardAIController::Patrol()
                     break;
                 }
                 //else if the node has not been visited add it to the queue:
-                else if(!visitedNodes.Contains(neighbour))
+                else if(!visitedNodes.Contains(neighbour) && !queue.Contains(neighbour))
                 {
                     queue.Add(neighbour);
                 }
@@ -200,11 +250,14 @@ void AGuardAIController::Patrol()
             destNode = prioritisedNodes[rand() % prioritisedNodes.Num()];
         }
         //30% chance to move to a node out of the agents FOV:
-        else
+        else if(validNodes.Num() > 0)
         {
            destNode = validNodes[rand() % validNodes.Num()];
         }
-        MoveToLocation(destNode->GetCoordinates(), 20.0f, true, true, true, true);
+        if (destNode != nullptr)
+        {
+            MoveToLocation(destNode->GetCoordinates(), 20.0f, true, true, true, true);
+        }
         moveCompleted = false;
     }
 }
@@ -246,13 +299,11 @@ void AGuardAIController::Flee()
     {
         return;
     }
-    std::vector<float> enemyInfluenceMap = std::vector<float>(propagator->GetInfluenceMap().size());
-    propagator->GetInfluenceMapController()->GetPropagatorEnemyInfluenceMap(propagator, enemyInfluenceMap);
     std::vector<float> enemyLOSMap = std::vector<float>(propagator->GetInfluenceMap().size());
     propagator->GetInfluenceMapController()->GetPropagatorEnemyLOSMap(propagator, enemyLOSMap);
 
 
-    if ((moveCompleted && (enemyLOSMap[currentNode->GetIndex()] > 0.0f || enemyInfluenceMap[currentNode->GetIndex()] > 0.0f)))
+    if (moveCompleted && enemyLOSMap[currentNode->GetIndex()] > 0.0f)
     {
         TArray<UGraphNode*> nodes = propagator->GetInfluenceMapController()->GetNodes();
         TArray<UGraphNode*> inCoverAgainstWallCloseNodes;
@@ -263,7 +314,7 @@ void AGuardAIController::Flee()
                 continue;
             }
             //Ignore all nodes that are in view:
-            if (enemyLOSMap[i] > 0.0f || enemyInfluenceMap[i] > 0.0f)
+            if (enemyLOSMap[i] > 0.0f)
             {
                 continue;
             }
@@ -369,14 +420,65 @@ void AGuardAIController::Investigate()
     }
 }
 
+void AGuardAIController::FindHelp()
+{
+    if (moveCompleted)
+    {
+        for (int i = 0; i < aiSettings->allies.Num(); i++)
+        {
+            AActor* ally = aiSettings->allies[i];
+            AGuardAIController* allyController = (AGuardAIController*)((APawn*)ally)->GetController();
+            if (GetOwner() != nullptr && allyController != nullptr)
+            {
+                allyController->AlertToPoint(GetOwner()->GetActorLocation());
+            }
+        }
+
+        std::vector<float> vulnerabilityMap = std::vector<float>(propagator->GetInfluenceMapController()->GetNodes().Num());
+
+        propagator->GetInfluenceMapController()->GetDirectedVulnerabilityMap(propagator, vulnerabilityMap);
+        propagator->GetInfluenceMapController()->NormaliseInfluenceMap(vulnerabilityMap);
+
+        int leastVulnerableIndex = 0;
+        float leastVulnerableValue = -INT_MAX;
+
+        for (int i = 0; i < vulnerabilityMap.size(); i++)
+        {
+            if (vulnerabilityMap[i] > leastVulnerableValue)
+            {
+                leastVulnerableIndex = i;
+                leastVulnerableValue = vulnerabilityMap[i];
+            }
+            else if (vulnerabilityMap[i] == leastVulnerableValue && rand() % 2 == 1)
+            {
+                leastVulnerableIndex = i;
+                leastVulnerableValue = vulnerabilityMap[i];
+            }
+        }
+        TArray<UPathNode*> path = pathfindingController->RunPathfinding(propagator->GetCurrentNode()->GetIndex(), leastVulnerableIndex, fleeTacticalInformation);
+        UPathFollowingComponent* pathFollowingComponent = GetPathFollowingComponent();
+        //Add all the waypoints from the calculated path:
+        TArray<FVector> locations;
+        for (UPathNode* pathNode : path)
+        {
+            locations.Add(pathNode->node->GetCoordinates());
+        }
+        //Assign the new path to the agent:
+        AController* controller = Cast<AController>(this);
+        FMetaNavMeshPath* MetaNavMeshPath = new FMetaNavMeshPath(locations, *controller);
+        TSharedPtr<FMetaNavMeshPath, ESPMode::ThreadSafe> MetaPathPtr(MetaNavMeshPath);
+        pathFollowingComponent->RequestMove(FAIMoveRequest(), MetaPathPtr);
+        moveCompleted = false;
+    }
+}
+
 //ENTER / EXIT CALLBACKS:
 
-void  AGuardAIController::OnEnterAttackState()
+void AGuardAIController::OnEnterAttackState()
 {
     StopMovement();
     moveCompleted = true;
 }
-
 
 void AGuardAIController::OnExitAttackState()
 {
@@ -394,27 +496,15 @@ void AGuardAIController::OnAttackToInvestigate()
 
 bool AGuardAIController::IsAimingAtTarget()
 {
-    //Fire raycast out of gun barrel:
-    TArray<FHitResult> hitResults;
     FVector start = aiSettings->gun->GetComponentLocation();
-    FVector end = start + (2000000.0f * aiSettings->gun->GetRightVector());
-    FCollisionQueryParams collisionParams;
-    FCollisionResponseParams collisionResponseParams = FCollisionResponseParams(ECollisionResponse::ECR_Overlap);
-    GetWorld()->LineTraceMultiByChannel(hitResults, start, end, ECC_WorldDynamic, collisionParams, collisionResponseParams);
-    //Loop over hit results:
-    for (FHitResult hitResult : hitResults)
-    {
-        //If it hits the target before it hits anything else, it is aiming at the target:
-        if (hitResult.Actor == actor)
-        {
-            continue;
-        }
-        else if (hitResult.Actor == aiSettings->target)
-        {
-            return true;
-        }
-    }
-    return false;
+    FVector end = aiSettings->target->GetTargetLocation();
+    FVector dir = end - start;
+    FVector gunDirection = aiSettings->gun->GetRightVector();
+
+    dir.Z = 0;
+    gunDirection.Z = 0;
+
+    return GetAngleBetweenVectors(dir, gunDirection) <= 10.0f && GetAngleBetweenVectors(dir, gunDirection) >= -10.0f;
 }
 
 bool AGuardAIController::HasAmmo()
@@ -484,4 +574,32 @@ bool AGuardAIController::CanSeeEnemy()
 bool AGuardAIController::IsInvestigating()
 {
     return investigating;
+}
+
+bool AGuardAIController::IsVulnerable()
+{
+    if (propagator->GetCurrentNode() != nullptr)
+    {
+        std::vector<float> vulnerabilityMap = std::vector<float>(propagator->GetInfluenceMapController()->GetNodes().Num());
+
+        propagator->GetInfluenceMapController()->GetDirectedVulnerabilityMap(propagator, vulnerabilityMap);
+        propagator->GetInfluenceMapController()->NormaliseInfluenceMap(vulnerabilityMap);
+
+        return vulnerabilityMap[propagator->GetCurrentNode()->GetIndex()] <= -0.3f;
+    }
+    return false;
+}
+
+bool AGuardAIController::IsNotVulnerable()
+{
+    if (propagator->GetCurrentNode() != nullptr)
+    {
+        std::vector<float> vulnerabilityMap = std::vector<float>(propagator->GetInfluenceMapController()->GetNodes().Num());
+
+        propagator->GetInfluenceMapController()->GetDirectedVulnerabilityMap(propagator, vulnerabilityMap);
+        propagator->GetInfluenceMapController()->NormaliseInfluenceMap(vulnerabilityMap);
+
+        return vulnerabilityMap[propagator->GetCurrentNode()->GetIndex()] >= 0.3f;
+    }
+    return false;
 }

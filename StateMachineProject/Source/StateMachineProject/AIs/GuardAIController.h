@@ -4,7 +4,7 @@
 #include "AIController.h"
 #include "Navigation/MetaNavMeshPath.h"
 #include "InfluenceMapPropagator.h"
-#include "TacticalPathfindingController.h"
+#include "PathfindingController.h"
 #include "GuardAISettings.h"
 #include "HSMStateMachine.h"
 #include "HSMState.h"
@@ -20,7 +20,7 @@ public:
 	virtual void OnMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result) override;
 
 	void Die();
-	void SetInvestigationPoint(FVector newInvestigationPoint);
+	void AlertToPoint(FVector newInvestigationPoint);
 
 	void Patrol();
 	void Aim();
@@ -28,6 +28,7 @@ public:
 	void Reload();
 	void Flee();
 	void Investigate();
+	void FindHelp();
 
 	void OnEnterAttackState();
 	void OnExitAttackState();
@@ -39,13 +40,16 @@ public:
 	bool HasHighHealth();
 	bool CanSeeEnemy();
 	bool IsInvestigating();
+	bool IsVulnerable();
+	bool IsNotVulnerable();
+
 	bool dead = false;
 
 private:
 	AActor* actor;
 	UGuardAISettings* aiSettings;
 	UInfluenceMapPropagator* propagator;
-	UTacticalPathfindingController* pathfindingController;
+	UPathfindingController* pathfindingController;
 	TArray<TacticalInformation*> fleeTacticalInformation;
 	UPROPERTY()
 	UHSMStateMachine* fsm;

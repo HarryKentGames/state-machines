@@ -47,6 +47,9 @@ public:
 	UPROPERTY(EditAnywhere)
 	TArray<AActor*> enemies;
 
+	UPROPERTY(EditAnywhere)
+	TArray<AActor*> allies;
+
 	UGuardAISettings();
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	

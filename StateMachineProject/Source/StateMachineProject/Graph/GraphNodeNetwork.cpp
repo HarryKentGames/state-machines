@@ -14,7 +14,6 @@ void UGraphNodeNetwork::BeginPlay()
 void UGraphNodeNetwork::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	//DebugDraw();
 }
 
 TArray<UGraphNode*> UGraphNodeNetwork::GetNodes()
@@ -113,6 +112,7 @@ void UGraphNodeNetwork::CreateMovementNetwork(const UNavigationSystemV1* navSys)
 	{
 		//Loop over expected neighbour positions:
 		FVector position = node->GetCoordinates();
+		int maxDistance = resolution;
 		for (float x = position.X - resolution; x <= position.X + resolution; x += resolution)
 		{
 			for (float y = position.Y - resolution; y <= position.Y + resolution; y += resolution)
@@ -128,9 +128,9 @@ void UGraphNodeNetwork::CreateMovementNetwork(const UNavigationSystemV1* navSys)
 				FVector queryExtents = FVector(100.0f, 100.0f, 100.0f);
 				navSys->ProjectPointToNavigation(neighbourPosition, navLocation, queryExtents);
 				//If the location on the nav mesh lines up with the expected location:
-				UGraphNode** neighbourNode = nodes.FindByPredicate([navLocation](UGraphNode*& item)
+				UGraphNode** neighbourNode = nodes.FindByPredicate([navLocation, maxDistance](UGraphNode*& item)
 				{
-					return item->GetCoordinates() == navLocation;
+					return FVector::Dist(item->GetCoordinates(), navLocation) < maxDistance;
 				});
 				if (neighbourNode)
 				{
@@ -142,6 +142,10 @@ void UGraphNodeNetwork::CreateMovementNetwork(const UNavigationSystemV1* navSys)
 						//If the length between the nodes is less than the actual distance, link the nodes, if they arent already:
 						if (pathLength <= FVector::Dist((*neighbourNode)->GetCoordinates(), position))
 						{
+							if (pathLength < 0)
+							{
+								continue;
+							}
 							if (!node->GetNeighbours().Contains(*neighbourNode))
 							{
 								(*neighbourNode)->AddNeighbour(node, pathLength);

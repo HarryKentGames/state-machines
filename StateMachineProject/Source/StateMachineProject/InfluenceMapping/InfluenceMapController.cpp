@@ -30,13 +30,22 @@ void UInfluenceMapController::BeginPlay()
 void UInfluenceMapController::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
+	DebugDraw();
 	UpdatePropagators();
 }
 
 TArray<UGraphNode*> UInfluenceMapController::GetNodes() const
 {
 	return nodes;
+}
+
+TArray<UInfluenceMapPropagator*> UInfluenceMapController::GetPropagators()
+{
+	if (propagators.Num() > 0)
+	{
+		return propagators;
+	}
+	return TArray<UInfluenceMapPropagator*>();
 }
 
 UGraphNodeNetwork* UInfluenceMapController::GetNodeNetwork() const
@@ -231,6 +240,41 @@ void UInfluenceMapController::GetPropagatorEnemyLOSMap(UInfluenceMapPropagator* 
 			for (int i = 0; i < LOSMap.size(); i++)
 			{
 				LOSMap[i] += pLOSMap[i];
+			}
+		}
+	}
+}
+
+void UInfluenceMapController::DebugDraw()
+{
+	if (propagators.Num() > 0)
+	{
+		std::vector<float> influenceMap = std::vector<float>(nodes.Num());
+		FColor orange = FColor(255, 69, 0);
+		FColor yellow = FColor(255, 255, 0);
+		FColor blue = FColor(0, 0, 255);
+		FColor cyan = FColor(0, 255, 255);
+
+		//Get the influence map to display:
+		GetDirectedVulnerabilityMap(propagators[0], influenceMap);
+		NormaliseInfluenceMap(influenceMap);
+
+		//Display all the nodes on the map, with colours representing their influence values:
+		for (UGraphNode* node : nodes)
+		{
+			FColor color = FColor();
+			if (influenceMap[node->GetIndex()] != 0.0f)
+			{
+				if (influenceMap[node->GetIndex()] > 0.0f)
+				{
+					color = FLinearColor::LerpUsingHSV(cyan, blue, influenceMap[node->GetIndex()]).ToFColor(false);
+					DrawDebugPoint(GetWorld(), node->GetCoordinates(), 10, color, false, 0.0f, 1);
+				}
+				else
+				{
+					color = FLinearColor::LerpUsingHSV(yellow, orange, abs(influenceMap[node->GetIndex()])).ToFColor(false);
+					DrawDebugPoint(GetWorld(), node->GetCoordinates(), 10, color, false, 0.0f, 1);
+				}
 			}
 		}
 	}
