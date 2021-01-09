@@ -3,60 +3,60 @@
 #include "CoreMinimal.h"
 #include "DrawDebugHelpers.h"
 #include "Components/ActorComponent.h"
-#include "GuardAISettings.generated.h"
+#include "SoldierAIConfig.generated.h"
 
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
-class STATEMACHINEPROJECT_API UGuardAISettings : public UActorComponent
+class STATEMACHINEPROJECT_API USoldierAIConfig : public UActorComponent
 {
 	GENERATED_BODY()
 
-public:	
+public:
 	UPROPERTY(EditAnywhere)
-	float health;
+		float health;
 	UPROPERTY(EditAnywhere)
-	float maxHealth;
+		float maxHealth;
 	float timeSinceTakenDamage;
 
 	UPROPERTY(EditAnywhere)
-	TArray<FVector> waypoints;
+		TArray<FVector> waypoints;
 	int currentWaypointIndex = 0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Soldier")
-	bool aiming;
+		bool aiming;
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Soldier")
-	bool aimed;
+		bool aimed;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Soldier")
-	bool firing;
+		bool firing;
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Soldier")
-	bool triggerPulled;
+		bool triggerPulled;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Soldier")
-	bool reloading;
+		bool reloading;
 
 	UPROPERTY(EditAnywhere)
-	int ammo;
+		int ammo;
 
 	UPROPERTY(EditAnywhere)
-	USceneComponent* gun;
+		USceneComponent* gun;
 
 	UPROPERTY(EditAnywhere)
-	AActor* target;
+		AActor* target;
 
 	UPROPERTY(EditAnywhere)
-	TArray<AActor*> enemies;
+		TArray<AActor*> enemies;
 
 	UPROPERTY(EditAnywhere)
-	TArray<AActor*> allies;
+		TArray<AActor*> allies;
 
-	UGuardAISettings();
+	USoldierAIConfig();
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
-	
+
 	void FireWeapon();
 	void ReloadWeapon();
 	void TakeDamage(float damage);
 
 protected:
-	virtual void BeginPlay() override;	
+	virtual void BeginPlay() override;
 };

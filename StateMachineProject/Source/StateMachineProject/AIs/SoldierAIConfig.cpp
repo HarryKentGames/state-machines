@@ -1,15 +1,15 @@
-#include "GuardAISettings.h"
-#include "GuardAIController.h"
+#include "SoldierAIController.h"
 #include "Kismet/GameplayStatics.h"
+#include "SoldierAIConfig.h"
 
-UGuardAISettings::UGuardAISettings()
+USoldierAIConfig::USoldierAIConfig()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 }
 
-void UGuardAISettings::BeginPlay()
+void USoldierAIConfig::BeginPlay()
 {
-	Super::BeginPlay();	
+	Super::BeginPlay();
 	firing = false;
 
 	TArray<UActorComponent*> children = TArray<UActorComponent*>();
@@ -18,19 +18,19 @@ void UGuardAISettings::BeginPlay()
 	{
 		if (child->GetName() == "Gun")
 		{
-			gun = (USceneComponent*) child;
+			gun = (USceneComponent*)child;
 		}
 	}
 	ammo = 10;
 }
 
-void UGuardAISettings::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void USoldierAIConfig::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	timeSinceTakenDamage += DeltaTime;
-	if (timeSinceTakenDamage > 5 && health < maxHealth)
+	if (timeSinceTakenDamage > 3 && health < maxHealth)
 	{
-		health += DeltaTime * 5;
+		health += DeltaTime * 10;
 		if (health > maxHealth)
 		{
 			health = maxHealth;
@@ -38,16 +38,16 @@ void UGuardAISettings::TickComponent(float DeltaTime, ELevelTick TickType, FActo
 	}
 }
 
-void UGuardAISettings::FireWeapon()
+void USoldierAIConfig::FireWeapon()
 {
-	firing = true; 
+	firing = true;
 	ammo--;
 	DrawDebugLine(GetWorld(), gun->GetComponentLocation(), target->GetTargetLocation(), FColor::Red, false, 0.09f, (uint8)'\000', 5.0f);
-	target->FindComponentByClass<UGuardAISettings>()->TakeDamage(3);
+	target->FindComponentByClass<USoldierAIConfig>()->TakeDamage(3);
 	for (int i = 0; i < enemies.Num(); i++)
 	{
 		AActor* enemy = enemies[i];
-		AGuardAIController* enemyController = (AGuardAIController*)((APawn*)enemy)->GetController();
+		ASoldierAIController* enemyController = (ASoldierAIController*)((APawn*)enemy)->GetController();
 		if (GetOwner() != nullptr && enemyController != nullptr)
 		{
 			enemyController->AlertToPoint(GetOwner()->GetActorLocation());
@@ -55,18 +55,18 @@ void UGuardAISettings::FireWeapon()
 	}
 }
 
-void UGuardAISettings::ReloadWeapon()
+void USoldierAIConfig::ReloadWeapon()
 {
 	reloading = true;
 	ammo = 10;
 }
 
-void UGuardAISettings::TakeDamage(float damage)
+void USoldierAIConfig::TakeDamage(float damage)
 {
 	health -= damage;
 	if (health <= 0)
 	{
-		AGuardAIController* controller = (AGuardAIController*)((APawn*)GetOwner())->GetController();
+		ASoldierAIController* controller = (ASoldierAIController*)((APawn*)GetOwner())->GetController();
 		if (controller != nullptr && !controller->dead)
 		{
 			controller->Die();

@@ -30,7 +30,6 @@ void UInfluenceMapController::BeginPlay()
 void UInfluenceMapController::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	DebugDraw();
 	UpdatePropagators();
 }
 

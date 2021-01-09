@@ -1,3 +1,5 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -5,15 +7,16 @@
 #include "Navigation/MetaNavMeshPath.h"
 #include "InfluenceMapPropagator.h"
 #include "PathfindingController.h"
-#include "GuardAISettings.h"
+#include "SoldierAIConfig.h"
 #include "HSMStateMachine.h"
 #include "HSMState.h"
-#include "GuardAIController.generated.h"
+#include "SoldierAIController.generated.h"
 
 UCLASS()
-class STATEMACHINEPROJECT_API AGuardAIController : public AAIController
+class STATEMACHINEPROJECT_API ASoldierAIController : public AAIController
 {
 	GENERATED_BODY()
+
 public:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
@@ -32,6 +35,8 @@ public:
 
 	void OnEnterAttackState();
 	void OnExitAttackState();
+	void OnEnterInvestigateState();
+
 	void OnAttackToInvestigate();
 
 	bool IsAimingAtTarget();
@@ -47,7 +52,7 @@ public:
 
 private:
 	AActor* actor;
-	UGuardAISettings* aiSettings;
+	USoldierAIConfig* aiSettings;
 	UInfluenceMapPropagator* propagator;
 	UPathfindingController* pathfindingController;
 	TArray<TacticalInformation*> fleeTacticalInformation;
