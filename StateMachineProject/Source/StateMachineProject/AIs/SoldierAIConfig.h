@@ -13,9 +13,14 @@ class STATEMACHINEPROJECT_API USoldierAIConfig : public UActorComponent
 
 public:
 	UPROPERTY(EditAnywhere)
-		float health;
+	float health;
 	UPROPERTY(EditAnywhere)
-		float maxHealth;
+	float maxHealth;
+	UPROPERTY(EditAnywhere)
+	int ammo;
+	UPROPERTY(EditAnywhere)
+	float fov;
+
 	float timeSinceTakenDamage;
 
 	UPROPERTY(EditAnywhere)
@@ -23,32 +28,27 @@ public:
 	int currentWaypointIndex = 0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Soldier")
-		bool aiming;
+	bool aiming;
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Soldier")
-		bool aimed;
-
+	bool aimed;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Soldier")
-		bool firing;
+	bool firing;
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Soldier")
-		bool triggerPulled;
-
+	bool triggerPulled;
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Soldier")
-		bool reloading;
+	bool reloading;
 
 	UPROPERTY(EditAnywhere)
-		int ammo;
+	USceneComponent* gun;
 
 	UPROPERTY(EditAnywhere)
-		USceneComponent* gun;
+	AActor* target;
 
 	UPROPERTY(EditAnywhere)
-		AActor* target;
+	TArray<AActor*> enemies;
 
 	UPROPERTY(EditAnywhere)
-		TArray<AActor*> enemies;
-
-	UPROPERTY(EditAnywhere)
-		TArray<AActor*> allies;
+	TArray<AActor*> allies;
 
 	USoldierAIConfig();
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;

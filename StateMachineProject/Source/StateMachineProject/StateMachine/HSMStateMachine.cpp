@@ -1,11 +1,12 @@
 #include "HSMStateMachine.h"
 
-UHSMStateMachine* UHSMStateMachine::MAKE(std::function<void()> newEnterFunction, std::function<void()> newTickFunction, std::function<void()> newExitFunction)
+UHSMStateMachine* UHSMStateMachine::MAKE(std::function<void()> newEnterFunction, std::function<void()> newTickFunction, std::function<void()> newExitFunction, bool resumable)
 {
 	UHSMStateMachine* fsm = NewObject<UHSMStateMachine>();
 	fsm->SetEnterLogic(newEnterFunction);
 	fsm->SetTickLogic(newTickFunction);
 	fsm->SetExitLogic(newExitFunction);
+	fsm->SetResumable(resumable);
 	return fsm;
 }
 
@@ -22,6 +23,11 @@ void UHSMStateMachine::AddState(UHSMStateBase* state)
 void UHSMStateMachine::SetStartState(UHSMStateBase* state)
 {
 	initialState = state;
+}
+
+void UHSMStateMachine::SetResumable(bool resumable)
+{
+	isResumable = resumable;
 }
 
 void UHSMStateMachine::ChangeCurrentState(UHSMStateBase* state)
@@ -41,7 +47,7 @@ void UHSMStateMachine::ChangeCurrentState(UHSMStateBase* state)
 void UHSMStateMachine::OnEnter()
 {
 	Super::OnEnter();
-	if (resumable && currentState != nullptr)
+	if (isResumable && currentState != nullptr)
 	{
 		currentState->OnEnter();
 	}

@@ -11,17 +11,19 @@ class STATEMACHINEPROJECT_API UHSMStateMachine : public UHSMStateBase
 public:
 	static UHSMStateMachine* MAKE(std::function<void()> newEnterFunction = nullptr,
 								  std::function<void()> newTickFunction = nullptr,
-								  std::function<void()> newExitFunction = nullptr);
+								  std::function<void()> newExitFunction = nullptr,
+								  bool resumable = false);
 
 
 	void AddState(UHSMStateBase* state);
 	void SetStartState(UHSMStateBase* state);
+	void SetResumable(bool resumable);
 
 	void OnEnter() override;
 	void OnTick() override;
 
 private:
-	bool resumable;
+	bool isResumable;
 
 	UPROPERTY()
 	TArray<UHSMStateBase*> states;

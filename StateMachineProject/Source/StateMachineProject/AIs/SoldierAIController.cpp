@@ -6,7 +6,7 @@ void ASoldierAIController::BeginPlay()
     Super::BeginPlay();
     actor = this->GetViewTarget();
     propagator = actor->FindComponentByClass<UInfluenceMapPropagator>();
-    aiSettings = actor->FindComponentByClass<USoldierAIConfig>();
+    aiConfig = actor->FindComponentByClass<USoldierAIConfig>();
     pathfindingController = UPathfindingController::FindInstanceInWorld(GetWorld());
     fleeTacticalInformation.Add(new AvoidEnemyTacticalInformation(5.0f, propagator));
 
@@ -43,8 +43,11 @@ void ASoldierAIController::BeginPlay()
         nullptr);
 
     //PATROL STATE TRANSITIONS:
-    UHSMTransition* patrolToAttackTransition = UHSMTransition::MAKE(attackStateMachine, [this]() { return this->CanSeeEnemy(); });
+    UHSMTransition* patrolToAttackTransition = UHSMTransition::MAKE(attackStateMachine, [this]() { return !this->HasLowHealth() && this->CanSeeEnemy() ; });
     patrolState->AddTransition(patrolToAttackTransition);
+
+    UHSMTransition* patrolToFleeTransition = UHSMTransition::MAKE(fleeState, [this]() { return this->HasLowHealth() && this->CanSeeEnemy(); });
+    patrolState->AddTransition(patrolToFleeTransition);
 
     UHSMTransition* patrolToInvestigateTransition = UHSMTransition::MAKE(investigateState, [this]() { return hasUninvestigatedLocation; });
     patrolState->AddTransition(patrolToInvestigateTransition);
@@ -53,16 +56,16 @@ void ASoldierAIController::BeginPlay()
     patrolState->AddTransition(patrolToFindHelpTransition);
 
     //ATTACK STATE TRANSITIONS:
-    UHSMTransition* attackToPatrolTransition = UHSMTransition::MAKE(patrolState, [this]() { return (aiSettings->target == nullptr || !this->CanSeeEnemy()) && !aiSettings->reloading; });
+    UHSMTransition* attackToPatrolTransition = UHSMTransition::MAKE(patrolState, [this]() { return aiConfig->target == nullptr && !aiConfig->reloading; });
     attackStateMachine->AddTransition(attackToPatrolTransition);
 
-    UHSMTransition* attackToInvestigateTransition = UHSMTransition::MAKE(investigateState, [this]() { return (aiSettings->target != nullptr && !this->CanSeeEnemy()) && !aiSettings->reloading; }, [this]() { this->OnAttackToInvestigate(); });
+    UHSMTransition* attackToInvestigateTransition = UHSMTransition::MAKE(investigateState, [this]() { return (aiConfig->target != nullptr && !this->CanSeeEnemy()) && !aiConfig->reloading; }, [this]() { this->OnAttackToInvestigate(); });
     attackStateMachine->AddTransition(attackToInvestigateTransition);
 
-    UHSMTransition* attackToFleeTransition = UHSMTransition::MAKE(fleeState, [this]() { return this->HasLowHealth() && !aiSettings->reloading; });
+    UHSMTransition* attackToFleeTransition = UHSMTransition::MAKE(fleeState, [this]() { return this->HasLowHealth() && !aiConfig->reloading; });
     attackStateMachine->AddTransition(attackToFleeTransition);
 
-    UHSMTransition* attackToFindHelpTransition = UHSMTransition::MAKE(findHelpState, [this]() { return this->IsVulnerable(); });
+    UHSMTransition* attackToFindHelpTransition = UHSMTransition::MAKE(findHelpState, [this]() { return this->IsVulnerable() && !aiConfig->reloading; });
     attackStateMachine->AddTransition(attackToFindHelpTransition);
 
     //AIM STATE TRANSITIONS:
@@ -81,7 +84,7 @@ void ASoldierAIController::BeginPlay()
     reloadState->AddTransition(reloadToShootTransition);
 
     //INVESTIGATE STATE TRANSITIONS:
-    UHSMTransition* investigateToPatrolTransition = UHSMTransition::MAKE(patrolState, [this]() { return !this->IsInvestigating(); });
+    UHSMTransition* investigateToPatrolTransition = UHSMTransition::MAKE(patrolState, [this]() { return !this->investigating; });
     investigateState->AddTransition(investigateToPatrolTransition);
 
     UHSMTransition* investigateToAttackTransition = UHSMTransition::MAKE(attackStateMachine, [this]() { return this->CanSeeEnemy(); });
@@ -125,7 +128,7 @@ void ASoldierAIController::BeginPlay()
 void ASoldierAIController::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
-    if (aiSettings->enemies.Num() <= 0)
+    if (aiConfig->enemies.Num() <= 0)
     {
         TArray<UInfluenceMapPropagator*> allPropagators = propagator->GetInfluenceMapController()->GetPropagators();
         for (UInfluenceMapPropagator* prop : allPropagators)
@@ -134,11 +137,11 @@ void ASoldierAIController::Tick(float DeltaSeconds)
             {
                 if (this->propagator->GetEnemyTeams().Contains(prop->GetTeam()))
                 {
-                    aiSettings->enemies.Add(prop->GetOwner());
+                    aiConfig->enemies.Add(prop->GetOwner());
                 }
                 else if (this->propagator->GetAlliedTeams().Contains(prop->GetTeam()) || this->propagator->GetTeam() == prop->GetTeam())
                 {
-                    aiSettings->allies.Add(prop->GetOwner());
+                    aiConfig->allies.Add(prop->GetOwner());
                 }
             }
         }
@@ -162,18 +165,22 @@ void ASoldierAIController::Die()
 {
     dead = true;
     propagator->GetInfluenceMapController()->RemovePropagator(propagator);
-    for (int i = 0; i < aiSettings->enemies.Num(); i++)
+    for (int i = 0; i < aiConfig->enemies.Num(); i++)
     {
-        if (aiSettings->enemies[i] != nullptr)
+        if (aiConfig->enemies[i] != nullptr)
         {
-            aiSettings->enemies[i]->FindComponentByClass<USoldierAIConfig>()->enemies.Remove(actor);
+            aiConfig->enemies[i]->FindComponentByClass<USoldierAIConfig>()->enemies.Remove(actor);
+            if (aiConfig->enemies[i]->FindComponentByClass<USoldierAIConfig>()->target == actor)
+            {
+                aiConfig->enemies[i]->FindComponentByClass<USoldierAIConfig>()->target = nullptr;
+            }
         }
     }
-    for (int i = 0; i < aiSettings->allies.Num(); i++)
+    for (int i = 0; i < aiConfig->allies.Num(); i++)
     {
-        if (aiSettings->allies[i] != nullptr)
+        if (aiConfig->allies[i] != nullptr)
         {
-            aiSettings->allies[i]->FindComponentByClass<USoldierAIConfig>()->allies.Remove(actor);
+            aiConfig->allies[i]->FindComponentByClass<USoldierAIConfig>()->allies.Remove(actor);
         }
     }
     actor->Destroy();
@@ -192,32 +199,43 @@ void ASoldierAIController::AlertToPoint(FVector newInvestigationPoint)
 
 void ASoldierAIController::Patrol()
 {
-    if (moveCompleted && propagator->GetCurrentNode() != nullptr)
+    UGraphNode* currentNode = propagator->GetCurrentNode();
+    if (moveCompleted && currentNode != nullptr)
     {
         //Get influence map information:
+        std::vector<float> agentInfluences = std::vector<float>(propagator->GetInfluenceMap().size());
+        propagator->GetInfluenceMapController()->GetPropagatorInfluenceMap(propagator, agentInfluences);
         std::vector<float> allyInfluences = std::vector<float>(propagator->GetInfluenceMap().size());
         propagator->GetInfluenceMapController()->GetPropagatorAllyInfluenceMap(propagator, allyInfluences);
         TArray<UGraphNode*> nodes = propagator->GetInfluenceMapController()->GetNodes();
 
-        UGraphNode* currentNode = propagator->GetCurrentNode();
-
+        float lowestInfluence = INT_MAX;
         TArray<UGraphNode*> prioritisedNodes;
         TArray<UGraphNode*> validNodes;
+
         TArray<UGraphNode*> queue;
         TArray<UGraphNode*> visitedNodes;
         queue.Add(currentNode);
-        //Search for all the nodes that form the boundary of having no influence (using modified Dijkstra's)
+        //Visit all node that this agent has influence over using Breadth-First traversal:
         while (queue.Num() > 0)
         {
             currentNode = queue[0];
+
             TArray<UGraphNode*> neighbours;
             currentNode->GetNeighbours().GenerateKeyArray(neighbours);
-
             for (UGraphNode* neighbour : neighbours)
             {
-                //If no allies have influence over the neighbour:
-                if (allyInfluences[neighbour->GetIndex()] == 0)
+                //If the influence at the neighbour is <= the lowest recorded influence, 
+                //add it to the list of potential patrol locations:
+                if (allyInfluences[neighbour->GetIndex()] <= lowestInfluence)
                 {
+                    //If value is <, reset the node lists:
+                    if (allyInfluences[neighbour->GetIndex()] < lowestInfluence)
+                    {
+                        lowestInfluence = allyInfluences[neighbour->GetIndex()];
+                        prioritisedNodes = TArray<UGraphNode*>();
+                        validNodes = TArray<UGraphNode*>();
+                    }
                     //Calculate the angle the agent would have to turn to face the node:
                     FVector agentForward = actor->GetActorForwardVector();
                     FVector directionToNeighbour = neighbour->GetCoordinates() - actor->GetActorLocation();
@@ -225,18 +243,18 @@ void ASoldierAIController::Patrol()
                     agentForward.Z = 0;
                     float angle = GetAngleBetweenVectors(agentForward, directionToNeighbour);
                     //If the node is in the agents FOV, prioritise it:
-                    if (angle > -30.0f && angle < 30.0f)
+                    if (angle > -aiConfig->fov && angle < aiConfig->fov)
                     {
                         prioritisedNodes.Add(neighbour);
                     }
+                    //Else just add it to list of potential patrol locations:
                     else
                     {
                         validNodes.Add(neighbour);
                     }
-                    break;
                 }
-                //else if the node has not been visited add it to the queue:
-                else if (!visitedNodes.Contains(neighbour) && !queue.Contains(neighbour))
+                //if the node has not been visited add it to the queue:
+                if (!visitedNodes.Contains(neighbour) && !queue.Contains(neighbour) && agentInfluences[currentNode->GetIndex()] >= 0.0f)
                 {
                     queue.Add(neighbour);
                 }
@@ -245,7 +263,7 @@ void ASoldierAIController::Patrol()
             queue.RemoveAt(0);
         }
         UGraphNode* destNode = nullptr;
-        //If there are prioritised nodes, 70% chance to move to a random prioritised node:
+        //If there are nodes in agent's fov, 70% chance to move to one:
         if (prioritisedNodes.Num() > 0 && (rand() % 100) < 70)
         {
             destNode = prioritisedNodes[rand() % prioritisedNodes.Num()];
@@ -255,66 +273,66 @@ void ASoldierAIController::Patrol()
         {
             destNode = validNodes[rand() % validNodes.Num()];
         }
+        //Move agent to the patrol location:
         if (destNode != nullptr)
         {
             MoveToLocation(destNode->GetCoordinates(), 20.0f, true, true, true, true);
+            moveCompleted = false;
         }
-        moveCompleted = false;
     }
 }
 
 void ASoldierAIController::Aim()
 {
-    aiSettings->aiming = true;
-    //Get agents forward vector, and vector to target:
-    FVector gunLocation = aiSettings->gun->GetComponentLocation();
-    FVector targetLocation = aiSettings->target->GetTargetLocation();
-    targetLocation.Z = gunLocation.Z;
-    FVector desiredDirection = targetLocation - gunLocation;
-    FVector gunDirection = aiSettings->gun->GetRightVector();
-    //Calculate angle between two vectors, and clamp to rotation speed:
-    float angle = FMath::Clamp(GetAngleBetweenVectors(desiredDirection, gunDirection), -5.0f, 5.0f);
-    //Create and add rotation to agent:
-    FRotator NewRotation = FRotator(0, angle, 0);
-    FQuat QuatRotation = FQuat(NewRotation);
-    actor->AddActorLocalRotation(QuatRotation, false, 0, ETeleportType::None);
+    if (aiConfig->target != nullptr)
+    {
+        aiConfig->aiming = true;
+        //Get agents forward vector, and vector to target:
+        FVector gunLocation = aiConfig->gun->GetComponentLocation();
+        FVector targetLocation = aiConfig->target->GetTargetLocation();
+        targetLocation.Z = gunLocation.Z;
+        FVector desiredDirection = targetLocation - gunLocation;
+        FVector gunDirection = aiConfig->gun->GetRightVector();
+        //Calculate angle between two vectors, and clamp to rotation speed:
+        float angle = FMath::Clamp(GetAngleBetweenVectors(desiredDirection, gunDirection), -5.0f, 5.0f);
+        //Create and add rotation to agent:
+        FRotator NewRotation = FRotator(0, angle, 0);
+        FQuat QuatRotation = FQuat(NewRotation);
+        actor->AddActorLocalRotation(QuatRotation, false, 0, ETeleportType::None);
+    }
 }
 
 void ASoldierAIController::Fire()
 {
-    if (!aiSettings->firing && aiSettings->aimed)
+    if (!aiConfig->firing && aiConfig->aimed && aiConfig->target != nullptr)
     {
-        aiSettings->FireWeapon();
+        aiConfig->FireWeapon();
     }
 }
 
 void ASoldierAIController::Reload()
 {
-    aiSettings->ReloadWeapon();
+    aiConfig->ReloadWeapon();
 }
 
 void ASoldierAIController::Flee()
 {
     UGraphNode* currentNode = propagator->GetCurrentNode();
-    if (currentNode == nullptr)
-    {
-        return;
-    }
     std::vector<float> enemyLOSMap = std::vector<float>(propagator->GetInfluenceMap().size());
     propagator->GetInfluenceMapController()->GetPropagatorEnemyLOSMap(propagator, enemyLOSMap);
-
-
-    if ((moveCompleted && enemyLOSMap[currentNode->GetIndex()] > 0.0f) || enemyLOSMap[destIndex] > 0.0f)
+    if (currentNode != nullptr && (moveCompleted && enemyLOSMap[currentNode->GetIndex()] > 0.0f) || enemyLOSMap[destIndex] > 0.0f)
     {
         TArray<UGraphNode*> nodes = propagator->GetInfluenceMapController()->GetNodes();
-        TArray<UGraphNode*> inCoverAgainstWallCloseNodes;
+        TArray<UGraphNode*> priorityNodes;
+        TArray<UGraphNode*> validNodes;
         for (int i = 0; i < enemyLOSMap.size(); i++)
         {
-            if (nodes[i] == propagator->GetCurrentNode())
+            //Ignore the node that the agent is currently at:
+            if (nodes[i] == currentNode)
             {
                 continue;
             }
-            //Ignore all nodes that are in view:
+            //Ignore all nodes that are in view of enemies:
             if (enemyLOSMap[i] > 0.0f)
             {
                 continue;
@@ -325,11 +343,11 @@ void ASoldierAIController::Flee()
             {
                 continue;
             }
-            //Calculate if on other side of wall:
+            //Calculate if on opposite side of wall from enemy:
             bool onOtherSide = true;
-            for (int j = 0; j < aiSettings->enemies.Num(); j++)
+            for (int j = 0; j < aiConfig->enemies.Num(); j++)
             {
-                AActor* enemy = aiSettings->enemies[j];
+                AActor* enemy = aiConfig->enemies[j];
                 if (enemy == nullptr)
                 {
                     continue;
@@ -339,36 +357,37 @@ void ASoldierAIController::Flee()
                 FHitResult hitResult = FHitResult();
                 FCollisionQueryParams collisionParams;
                 FCollisionResponseParams collisionResponseParams = FCollisionResponseParams(ECollisionResponse::ECR_Block);
-                //Ignore nodes that are not on the opposite side of a wall from the enemy:
                 if (!GetWorld()->LineTraceSingleByChannel(hitResult, nodes[i]->GetCoordinates(), nodes[i]->GetCoordinates() + dir * propagator->GetInfluenceMapController()->GetNodeNetwork()->GetResolution() * 1.5f, ECC_GameTraceChannel1, collisionParams, collisionResponseParams))
                 {
                     onOtherSide = false;
                     break;
                 }
-                //Add the node to a list of in-cover nodes:
             }
+            //If on opposite side of wall from enemy, prioritise the node:
             if (!onOtherSide)
             {
-                continue;
+                priorityNodes.Add(nodes[i]);
             }
             else
             {
-                inCoverAgainstWallCloseNodes.Add(nodes[i]);
+                validNodes.Add(nodes[i]);
             }
         }
-        if (inCoverAgainstWallCloseNodes.Num() > 0)
+        TArray<UPathNode*> bestPath;
+        TArray<UGraphNode*> nodeList = priorityNodes.Num() > 0 ? priorityNodes : validNodes;
+        //If there are nodes in cover, move to one:
+        if (nodeList.Num() > 0)
         {
-            //Find the shortest path to a point of cover:
-            TArray<UPathNode*> shortestPath;
+            //Find the best path to a point of cover using tactical pathfinding:
             float lowestPathScore = INT_MAX;
-            for (UGraphNode* inCoverNode : inCoverAgainstWallCloseNodes)
+            for (UGraphNode* node : nodeList)
             {
-                TArray<UPathNode*> path = pathfindingController->RunPathfinding(currentNode->GetIndex(), inCoverNode->GetIndex(), fleeTacticalInformation);
+                TArray<UPathNode*> path = pathfindingController->RunPathfinding(currentNode->GetIndex(), node->GetIndex(), fleeTacticalInformation);
                 float pathLength = pathfindingController->CalculatePathLength(path, fleeTacticalInformation);
                 float closestEnemyDistance = INT_MAX;
-                for (int i = 0; i < aiSettings->enemies.Num(); i++)
+                for (int i = 0; i < aiConfig->enemies.Num(); i++)
                 {
-                    UNavigationPath* pathToEnemy = UNavigationSystemV1::GetCurrent(GetWorld())->FindPathToLocationSynchronously(GetWorld(), aiSettings->enemies[i]->GetActorLocation(), inCoverNode->GetCoordinates());
+                    UNavigationPath* pathToEnemy = UNavigationSystemV1::GetCurrent(GetWorld())->FindPathToLocationSynchronously(GetWorld(), aiConfig->enemies[i]->GetActorLocation(), node->GetCoordinates());
                     if (pathToEnemy->GetPathLength() < closestEnemyDistance)
                     {
                         closestEnemyDistance = pathToEnemy->GetPathLength();
@@ -377,25 +396,43 @@ void ASoldierAIController::Flee()
                 float pathScore = pathLength - closestEnemyDistance;
                 if (pathScore < lowestPathScore && path.Num() > 0)
                 {
-                    destIndex = inCoverNode->GetIndex();
-                    shortestPath = path;
+                    bestPath = path;
                     lowestPathScore = pathScore;
                 }
             }
-            UPathFollowingComponent* pathFollowingComponent = GetPathFollowingComponent();
-            //Add all the waypoints from the calculated path:
-            TArray<FVector> locations;
-            for (UPathNode* pathNode : shortestPath)
-            {
-                locations.Add(pathNode->node->GetCoordinates());
-            }
-            //Assign the new path to the agent:
-            AController* controller = Cast<AController>(this);
-            FMetaNavMeshPath* MetaNavMeshPath = new FMetaNavMeshPath(locations, *controller);
-            TSharedPtr<FMetaNavMeshPath, ESPMode::ThreadSafe> MetaPathPtr(MetaNavMeshPath);
-            pathFollowingComponent->RequestMove(FAIMoveRequest(), MetaPathPtr);
-            moveCompleted = false;
         }
+        //Else move to the node at which the agent is least vulnerable:
+        else
+        {
+            //Get the propagator's directed vulnerability map and find the node at which he is least vulnerable:
+            std::vector<float> directedVulnerabilityMap = std::vector<float>(propagator->GetInfluenceMap().size());
+            propagator->GetInfluenceMapController()->GetDirectedVulnerabilityMap(propagator, directedVulnerabilityMap);
+            float bestScore = INT_MIN;
+            int bestScoreIndex = 0;
+            for (int i = 0; i < directedVulnerabilityMap.size(); i++)
+            {
+                if (directedVulnerabilityMap[i] > bestScore)
+                {
+                    bestScore = directedVulnerabilityMap[i];
+                    bestScoreIndex = i;
+                }
+            }
+            //Find the best path to the least vulnerable node:
+            bestPath = pathfindingController->RunPathfinding(currentNode->GetIndex(), bestScoreIndex, fleeTacticalInformation);
+        }
+        destIndex = bestPath[bestPath.Num() - 1]->node->GetIndex();
+        //Give this path to the agent:
+        UPathFollowingComponent* pathFollowingComponent = GetPathFollowingComponent();
+        TArray<FVector> locations;
+        for (UPathNode* pathNode : bestPath)
+        {
+            locations.Add(pathNode->node->GetCoordinates());
+        }
+        AController* controller = Cast<AController>(this);
+        FMetaNavMeshPath* MetaNavMeshPath = new FMetaNavMeshPath(locations, *controller);
+        TSharedPtr<FMetaNavMeshPath, ESPMode::ThreadSafe> MetaPathPtr(MetaNavMeshPath);
+        pathFollowingComponent->RequestMove(FAIMoveRequest(), MetaPathPtr);
+        moveCompleted = false;
     }
 }
 
@@ -431,9 +468,9 @@ void ASoldierAIController::FindHelp()
 {
     if (moveCompleted)
     {
-        for (int i = 0; i < aiSettings->allies.Num(); i++)
+        for (int i = 0; i < aiConfig->allies.Num(); i++)
         {
-            AActor* ally = aiSettings->allies[i];
+            AActor* ally = aiConfig->allies[i];
             ASoldierAIController* allyController = (ASoldierAIController*)((APawn*)ally)->GetController();
             if (GetOwner() != nullptr && allyController != nullptr)
             {
@@ -490,7 +527,7 @@ void ASoldierAIController::OnEnterAttackState()
 
 void ASoldierAIController::OnExitAttackState()
 {
-    aiSettings->aiming = false;
+    aiConfig->aiming = false;
 }
 
 void ASoldierAIController::OnEnterInvestigateState()
@@ -521,19 +558,19 @@ void ASoldierAIController::OnEnterInvestigateState()
 void ASoldierAIController::OnAttackToInvestigate()
 {
     hasUninvestigatedLocation = true;
-    investigationPoint = aiSettings->target->GetActorLocation();
+    investigationPoint = aiConfig->target->GetActorLocation();
 }
 
 //TRANSITION CONDITIONS:
 
 bool ASoldierAIController::IsAimingAtTarget()
 {
-    if (aiSettings->target != nullptr)
+    if (aiConfig->target != nullptr)
     {
-        FVector start = aiSettings->gun->GetComponentLocation();
-        FVector end = aiSettings->target->GetTargetLocation();
+        FVector start = aiConfig->gun->GetComponentLocation();
+        FVector end = aiConfig->target->GetTargetLocation();
         FVector dir = end - start;
-        FVector gunDirection = aiSettings->gun->GetRightVector();
+        FVector gunDirection = aiConfig->gun->GetRightVector();
 
         dir.Z = 0;
         gunDirection.Z = 0;
@@ -551,7 +588,7 @@ bool ASoldierAIController::IsAimingAtTarget()
                 {
                     continue;
                 }
-                else if (hitResult.Actor == aiSettings->target)
+                else if (hitResult.Actor == aiConfig->target)
                 {
                     return true;
                 }
@@ -563,26 +600,26 @@ bool ASoldierAIController::IsAimingAtTarget()
 
 bool ASoldierAIController::HasAmmo()
 {
-    return aiSettings->ammo > 0;
+    return aiConfig->ammo > 0;
 }
 
 bool ASoldierAIController::HasLowHealth()
 {
-    return aiSettings->health <= (aiSettings->maxHealth / 4);
+    return aiConfig->health <= (aiConfig->maxHealth / 4);
 }
 
 bool ASoldierAIController::HasHighHealth()
 {
-    return aiSettings->health >= (aiSettings->maxHealth * 0.75);
+    return aiConfig->health >= (aiConfig->maxHealth * 0.75);
 }
 
 bool ASoldierAIController::CanSeeEnemy()
 {
-    if (aiSettings->enemies.Num() > 0)
+    if (aiConfig->enemies.Num() > 0)
     {
-        for (int i = 0; i < aiSettings->enemies.Num(); i++)
+        for (int i = 0; i < aiConfig->enemies.Num(); i++)
         {
-            AActor* enemy = aiSettings->enemies[i];
+            AActor* enemy = aiConfig->enemies[i];
             if (enemy == nullptr)
             {
                 continue;
@@ -616,18 +653,13 @@ bool ASoldierAIController::CanSeeEnemy()
                 }
                 if (!obstructed)
                 {
-                    aiSettings->target = enemy;
+                    aiConfig->target = enemy;
                     return true;
                 }
             }
         }
     }
     return false;
-}
-
-bool ASoldierAIController::IsInvestigating()
-{
-    return investigating;
 }
 
 bool ASoldierAIController::IsVulnerable()

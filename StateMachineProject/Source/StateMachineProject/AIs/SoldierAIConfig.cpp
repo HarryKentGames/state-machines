@@ -21,7 +21,11 @@ void USoldierAIConfig::BeginPlay()
 			gun = (USceneComponent*)child;
 		}
 	}
+	health = maxHealth = 100;
+	fov = 80;
 	ammo = 10;
+	enemies = TArray<AActor*>();
+	allies = TArray<AActor*>();
 }
 
 void USoldierAIConfig::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)

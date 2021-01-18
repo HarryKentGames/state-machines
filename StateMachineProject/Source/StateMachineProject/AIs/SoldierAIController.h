@@ -44,7 +44,6 @@ public:
 	bool HasLowHealth();
 	bool HasHighHealth();
 	bool CanSeeEnemy();
-	bool IsInvestigating();
 	bool IsVulnerable();
 	bool IsNotVulnerable();
 
@@ -52,7 +51,7 @@ public:
 
 private:
 	AActor* actor;
-	USoldierAIConfig* aiSettings;
+	USoldierAIConfig* aiConfig;
 	UInfluenceMapPropagator* propagator;
 	UPathfindingController* pathfindingController;
 	TArray<TacticalInformation*> fleeTacticalInformation;
